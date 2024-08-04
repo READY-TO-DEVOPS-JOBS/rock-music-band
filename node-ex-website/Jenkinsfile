@@ -21,7 +21,7 @@ pipeline {
         
         stage('Checkout') {
             steps {
-                git 'https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git'
+               git branch: 'main', url: 'https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git'
             }
         }
         
