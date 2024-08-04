@@ -29,8 +29,10 @@ pipeline {
         stage('install Dependencies') {
             steps {
                script {
-                // Install dependencies using npm
-                sh 'npm install'
+                    // Navigate to the directory containing package.json
+                    dir('node-ex-website') {
+                        // Run npm install in the correct directory
+                        sh 'npm install'
                }
             }
         }
