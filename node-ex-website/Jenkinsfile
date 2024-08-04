@@ -1,0 +1,146 @@
+pipeline {
+    agent any
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('Docker-cred')
+    }
+
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Clean Environment') {
+            steps {
+                sh '''
+                docker system prune -fa || true
+                '''
+            }
+        } 
+        
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git'
+            }
+        }
+        
+
+        stage('install Dependencies') {
+            steps {
+               script {
+                // Install dependencies using npm
+                sh 'npm install'
+               }
+            }
+        }
+
+        stage('Login to DockerHub') {
+            steps {
+                sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+              script {
+                // Run tests using npm (assuming the test script is defined in package.json)
+                sh 'npm test'
+              }
+            }
+        }
+        
+        stage('File System Scan') {
+            steps {
+                sh "trivy fs --format table -o trivy-fs-report.html ."
+            }
+        }
+
+        // Uncomment and configure the following stage if you want to use SonarQube analysis
+        // stage('SonarQube Analysis') {
+        //     agent {
+        //         docker {
+        //             image 'sonarsource/sonar-scanner-cli:4.8.0'
+        //             args '-v /path/to/sonar-scanner:/opt/sonar-scanner' // Adjust this path accordingly
+        //         }
+        //     }
+        //     environment {                 
+        //         CI = 'true'
+        //         scannerHome = '/opt/sonar-scanner'
+        //     }
+        //     steps {
+        //         withSonarQubeEnv('sonar') {
+        //             sh "${scannerHome}/bin/sonar-scanner"
+        //         }
+        //     }
+        // }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                docker build -t bulawesley/rock-music-band:v$BUILD_NUMBER .
+                '''
+            }
+        }
+
+        stage('Docker Image Scan') {
+            steps {
+                sh "trivy image --format table -o trivy-image-report.html bulawesley/rock-music-band:v$BUILD_NUMBER"
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh 'docker push bulawesley/rock-music-band:v$BUILD_NUMBER'
+            }
+        }
+
+        stage('Deploy Application') {
+            steps {
+                script {
+                    // Stop any running container with the same name
+                    sh 'docker stop rock-music-band || true'
+                    sh 'docker rm rock-music-band || true'
+
+                    // Run the new container with the application
+                    sh '''
+                        docker run -d \
+                        --name  \
+                        -p 4564:8080 \
+                        bulawesley/rock-music-band:v$BUILD_NUMBER
+                    '''
+                }
+            }
+        }
+        stage('helm-charts') {
+            steps {
+                script {
+                    sh '''
+                        rm -rf  || true
+                        git clone https://github.com/s5wesley/rock-music-band.git
+                        cd 
+
+                        cat << EOF > values.yaml
+                        repository:
+                          tag:  v$BUILD_NUMBER
+                          assets:
+                            image: bulawesley/rock-music-band
+                        EOF
+
+                        cat values.yaml
+                        git add -A
+                        git commit -m "Change from Jenkins build ${BUILD_NUMBER}"
+                        git push https://github.com/s5wesley/.git
+                    '''
+                }
+            }
+        }
+
+
+        stage('Display Server IP') {
+            steps {
+                sh 'curl ifconfig.io'
+            }
+        }
+    }
+}
