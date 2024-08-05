@@ -13,30 +13,24 @@ pipeline {
 
         stage('Clean Environment') {
             steps {
-                sh '''
-                docker system prune -fa || true
-                '''
+                sh 'docker system prune -fa || true'
             }
         } 
         
         stage('Checkout') {
             steps {
-                // Checkout the code from the repository
                 git branch: 'main', url: 'https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git'
             }
         }
         
-
-        stage('install Dependencies') {
+        stage('Install Dependencies') {
             steps {
-               script {
-                    // Navigate to the directory containing package.json
+                script {
                     dir('node-ex-website') {
-                        // Run npm install in the correct directory
                         sh 'npm install'
-               }
+                    }
+                }
             }
-          }
         }
 
         stage('Login to DockerHub') {
@@ -45,48 +39,28 @@ pipeline {
             }
         }
 
+        // Remove the Test stage if not using tests
         stage('Run Tests') {
             steps {
-              script {
-                  // Navigate to the directory containing package.json
-                 dir('node-ex-website') {
-                  // Run npm install in the correct directory
-                sh 'npm test'
-              }
+                script {
+                    dir('node-ex-website') {
+                        sh 'npm test'
+                    }
+                }
             }
-          }
-        }  
-        
+        }
+
         stage('File System Scan') {
             steps {
                 sh "trivy fs --format table -o trivy-fs-report.html ."
             }
         }
 
-        // Uncomment and configure the following stage if you want to use SonarQube analysis
-        // stage('SonarQube Analysis') {
-        //     agent {
-        //         docker {
-        //             image 'sonarsource/sonar-scanner-cli:4.8.0'
-        //             args '-v /path/to/sonar-scanner:/opt/sonar-scanner' // Adjust this path accordingly
-        //         }
-        //     }
-        //     environment {                 
-        //         CI = 'true'
-        //         scannerHome = '/opt/sonar-scanner'
-        //     }
-        //     steps {
-        //         withSonarQubeEnv('sonar') {
-        //             sh "${scannerHome}/bin/sonar-scanner"
-        //         }
-        //     }
-        // }
-
         stage('Build Docker Image') {
             steps {
-                sh '''
-                docker build -t bulawesley/rock-music-band:v$BUILD_NUMBER .
-                '''
+                dir('node-ex-website') {
+                    sh 'docker build -t bulawesley/rock-music-band:v$BUILD_NUMBER .'
+                }
             }
         }
 
@@ -105,27 +79,25 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 script {
-                    // Stop any running container with the same name
-                    sh 'docker stop rock-music-band || true'
-                    sh 'docker rm rock-music-band || true'
-
-                    // Run the new container with the application
                     sh '''
+                        docker stop rock-music-band || true
+                        docker rm rock-music-band || true
                         docker run -d \
-                        --name  \
+                        --name rock-music-band \
                         -p 4564:8080 \
                         bulawesley/rock-music-band:v$BUILD_NUMBER
                     '''
                 }
             }
         }
+
         stage('helm-charts') {
             steps {
                 script {
                     sh '''
-                        rm -rf  || true
+                        rm -rf rock-music-band  || true
                         git clone https://github.com/s5wesley/rock-music-band.git
-                        cd 
+                        cd rock-music-band 
 
                         cat << EOF > values.yaml
                         repository:
@@ -137,17 +109,16 @@ pipeline {
                         cat values.yaml
                         git add -A
                         git commit -m "Change from Jenkins build ${BUILD_NUMBER}"
-                        git push https://github.com/s5wesley/.git
+                        git push https://github.com/s5wesley/rock-music-band.git
                     '''
                 }
             }
         }
 
-
         stage('Display Server IP') {
             steps {
                 sh 'curl ifconfig.io'
-             }
-         }
+            }
+        }
     }
 }
