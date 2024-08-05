@@ -84,7 +84,7 @@ pipeline {
                         docker rm rock-music-band || true
                         docker run -d \
                         --name rock-music-band \
-                        -p 4564:8080 \
+                        -p 4565:3000\
                         bulawesley/rock-music-band:v$BUILD_NUMBER
                     '''
                 }
