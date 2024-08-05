@@ -48,11 +48,14 @@ pipeline {
         stage('Run Tests') {
             steps {
               script {
-                // Run tests using npm (assuming the test script is defined in package.json)
+                  // Navigate to the directory containing package.json
+                 dir('node-ex-website') {
+                  // Run npm install in the correct directory
                 sh 'npm test'
               }
             }
-        }
+          }
+        }  
         
         stage('File System Scan') {
             steps {
