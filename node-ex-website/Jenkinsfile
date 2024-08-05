@@ -96,7 +96,7 @@ pipeline {
                 script {
                     sh '''
                         rm -rf rock-music-band  || true
-                        git clone https://github.com/s5wesley/rock-music-band.git
+                        git clone https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git
                         cd rock-music-band 
 
                         cat << EOF > values.yaml
@@ -109,7 +109,7 @@ pipeline {
                         cat values.yaml
                         git add -A
                         git commit -m "Change from Jenkins build ${BUILD_NUMBER}"
-                        git push https://github.com/s5wesley/rock-music-band.git
+                        git push 
                     '''
                 }
             }
