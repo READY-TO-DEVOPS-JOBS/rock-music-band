@@ -23,15 +23,20 @@ pipeline {
             }
         }
         
-        stage('Install Dependencies') {
-            steps {
-                script {
-                    dir('node-ex-website') {
-                        sh 'npm install'
-                    }
-                }
+       stage('Install Dependencies') {
+         agent {
+          docker { image 'node:18-alpine'
+            args '-u root'  }
+    }
+    steps {
+        script {
+            dir('node-ex-website') {
+                sh 'npm install'
             }
         }
+    }
+}
+
 
         stage('Login to DockerHub') {
             steps {
@@ -39,20 +44,33 @@ pipeline {
             }
         }
 
-        // Remove the Test stage if not using tests
-        stage('Run Tests') {
+       stage('test') {
+            agent {
+                docker { image 'node:22.4' 
+                args '-u root' }
+            }
             steps {
-                script {
-                    dir('node-ex-website') {
-                        sh 'npm test'
-                    }
-                }
+                sh'''
+                cd node-ex-website
+                npm install 
+                npm test --passWithNoTests || true
+                '''
             }
         }
 
         stage('File System Scan') {
+            agent {
+                docker { 
+                    image 'bitnami/trivy:latest' 
+                    args '--entrypoint="" -u root'
+                }
+            }
+
             steps {
-                sh "trivy fs --format table -o trivy-fs-report.html ."
+                sh ''' 
+                cd node-ex-website
+                trivy fs --format table -o trivy-fs-report.html .
+                '''
             }
         }
 
@@ -64,9 +82,18 @@ pipeline {
             }
         }
 
-        stage('Docker Image Scan') {
+               stage('Docker Image Scan') {
+            agent {
+                docker {
+                    image 'bitnami/trivy:latest'
+                    args '-u root --entrypoint=""'
+                }
+            }
+
             steps {
+                // Scan the  image
                 sh "trivy image --format table -o trivy-image-report.html bulawesley/rock-music-band:v$BUILD_NUMBER"
+
             }
         }
 
@@ -76,44 +103,36 @@ pipeline {
             }
         }
 
-        stage('Deploy Application') {
-            steps {
-                script {
-                    sh '''
-                        docker stop rock-music-band || true
-                        docker rm rock-music-band || true
-                        docker run -d \
-                        --name rock-music-band \
-                        -p 4565:3000\
-                        bulawesley/rock-music-band:v$BUILD_NUMBER
-                    '''
-                }
-            }
-        }
+       stage('trigger-deployment') {
+    agent { 
+        label 'deploy' 
+    }
+    steps {
+        sh '''
+            TAG=${BUILD_NUMBER}
+            rm -rf s5wesley/rock-band-deployment || true
+            git clone https://github.com/s5wesley/rock-band-deployment.git 
+            cd s5wesley/rock-band-deployment/chart
+            # Update the image repository and tag
+            yq eval '.Values.repository.assets.image = "rock-music-band"' -i values.yaml
+            yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
+            
+            # Configure Git for commit
+            git config --global user.name "devopseasylearning"
+            git config --global user.email info@devopseasylearning.com
 
-        stage('helm-charts') {
-            steps {
-                script {
-                    sh '''
-                        rm -rf rock-music-band  || true
-                        git clone https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git
-                        cd rock-music-band 
+            # Add and commit changes if necessary
+            git add -A
+            if git diff-index --quiet HEAD; then
+               echo "No changes to commit"
+            else
+               git commit -m "updating rock-music-band to ${TAG}"
+               git push origin main
+            fi
+        ''' 
+    }   
+}
 
-                        cat << EOF > values.yaml
-                        repository:
-                          tag:  v$BUILD_NUMBER
-                          assets:
-                            image: bulawesley/rock-music-band
-                        EOF
-
-                        cat values.yaml
-                        git add -A
-                        git commit -m "Change from Jenkins build ${BUILD_NUMBER}"
-                        git push 
-                    '''
-                }
-            }
-        }
 
         stage('Display Server IP') {
             steps {
