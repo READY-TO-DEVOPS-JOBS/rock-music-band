@@ -118,7 +118,7 @@ pipeline {
             git clone https://github.com/s5wesley/rock-band-deployment.git 
             cd rock-band-deployment/chart
             # Update the image repository and tag
-            yq eval '.Values.repository.assets.image = "s5wesley-rock-music-band"' -i values.yaml
+            yq eval '.Values.repository.assets.image = "devopseasylearning/s5wesley-rock-music-band"' -i values.yaml
             yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
             
             # Configure Git for commit
@@ -130,7 +130,7 @@ pipeline {
             if git diff-index --quiet HEAD; then
                echo "No changes to commit"
             else
-               git commit -m "updating s5wesley-rock-music-band to ${TAG}"
+               git commit -m "updating devopseasylearning/s5wesley-rock-music-band to ${TAG}"
                git push origin main
             fi
         ''' 
