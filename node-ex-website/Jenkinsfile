@@ -130,7 +130,7 @@ pipeline {
                echo "No changes to commit"
             else
                git commit -m "updating devopseasylearning/s5wesley-rock-music-band to ${TAG}"
-               git push origin main
+               git push origin master
             fi
         ''' 
     }   
