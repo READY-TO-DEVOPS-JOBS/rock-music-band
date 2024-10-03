@@ -86,7 +86,12 @@ pipeline {
             }
         }
 
-               stage('Docker Image Scan') {
+        stage('Push Docker Image') {
+            steps {
+                sh 'docker push devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER'
+            }
+        }
+        stage('Docker Image Scan') {
             agent {
                 docker {
                     image 'bitnami/trivy:latest'
@@ -98,12 +103,6 @@ pipeline {
                 // Scan the  image
                 sh "trivy image --format table -o trivy-image-report.html devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER"
 
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                sh 'docker push devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER'
             }
         }
 
