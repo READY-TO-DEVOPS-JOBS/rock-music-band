@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('Docker-cred')
+        DOCKERHUB_CREDENTIALS = credentials('del-docker-hub-auth')
     }
 
     stages {
@@ -17,9 +17,11 @@ pipeline {
             }
         } 
         
-        stage('Checkout') {
+       stage('checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git'
+                git branch: 'main', 
+                    credentialsId: 'github-ssh', 
+                    url: 'https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git'
             }
         }
         
@@ -38,9 +40,11 @@ pipeline {
 }
 
 
-        stage('Login to DockerHub') {
+        stage('Docker Login') {
             steps {
-                sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+                withCredentials([usernamePassword(credentialsId: 'del-docker-hub-auth', usernameVariable: 'DOCKERHUB_CREDENTIALS_USR', passwordVariable: 'DOCKERHUB_CREDENTIALS_PSW')]) {
+                    sh 'docker login -u $DOCKERHUB_CREDENTIALS_USR -p $DOCKERHUB_CREDENTIALS_PSW'
+                }
             }
         }
 
@@ -77,7 +81,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 dir('node-ex-website') {
-                    sh 'docker build -t bulawesley/rock-music-band:v$BUILD_NUMBER .'
+                    sh 'docker build -t devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER .'
                 }
             }
         }
@@ -92,14 +96,14 @@ pipeline {
 
             steps {
                 // Scan the  image
-                sh "trivy image --format table -o trivy-image-report.html bulawesley/rock-music-band:v$BUILD_NUMBER"
+                sh "trivy image --format table -o trivy-image-report.html devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER"
 
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                sh 'docker push bulawesley/rock-music-band:v$BUILD_NUMBER'
+                sh 'docker push devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER'
             }
         }
 
@@ -110,11 +114,11 @@ pipeline {
     steps {
         sh '''
             TAG=${BUILD_NUMBER}
-            rm -rf s5wesley/rock-band-deployment || true
+            rm -rf rock-band-deployment || true
             git clone https://github.com/s5wesley/rock-band-deployment.git 
-            cd s5wesley/rock-band-deployment/chart
+            cd rock-band-deployment/chart
             # Update the image repository and tag
-            yq eval '.Values.repository.assets.image = "rock-music-band"' -i values.yaml
+            yq eval '.Values.repository.assets.image = "s5wesley-rock-music-band"' -i values.yaml
             yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
             
             # Configure Git for commit
@@ -126,7 +130,7 @@ pipeline {
             if git diff-index --quiet HEAD; then
                echo "No changes to commit"
             else
-               git commit -m "updating rock-music-band to ${TAG}"
+               git commit -m "updating s5wesley-rock-music-band to ${TAG}"
                git push origin main
             fi
         ''' 
