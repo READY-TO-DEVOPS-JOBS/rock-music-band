@@ -17,28 +17,29 @@ pipeline {
             }
         } 
         
-       stage('checkout') {
+        stage('checkout') {
             steps {
                 git branch: 'main', 
                     credentialsId: 'github-ssh', 
-                    url: 'https://github.com/READY-TO-DEVOPS-JOBS/rock-music-band.git'
+                    url: 'git@github.com:READY-TO-DEVOPS-JOBS/rock-music-band.git'
             }
         }
         
-       stage('Install Dependencies') {
-         agent {
-          docker { image 'node:18-alpine'
-            args '-u root'  }
-    }
-    steps {
-        script {
-            dir('node-ex-website') {
-                sh 'npm install'
+        stage('Install Dependencies') {
+            agent {
+                docker { 
+                    image 'node:18-alpine'
+                    args '-u root'  
+                }
+            }
+            steps {
+                script {
+                    dir('node-ex-website') {
+                        sh 'npm install'
+                    }
+                }
             }
         }
-    }
-}
-
 
         stage('Docker Login') {
             steps {
@@ -48,13 +49,15 @@ pipeline {
             }
         }
 
-       stage('test') {
+        stage('test') {
             agent {
-                docker { image 'node:22.4' 
-                args '-u root' }
+                docker { 
+                    image 'node:22.4' 
+                    args '-u root' 
+                }
             }
             steps {
-                sh'''
+                sh '''
                 cd node-ex-website
                 npm install 
                 npm test --passWithNoTests || true
@@ -69,7 +72,6 @@ pipeline {
                     args '--entrypoint="" -u root'
                 }
             }
-
             steps {
                 sh ''' 
                 cd node-ex-website
@@ -91,6 +93,7 @@ pipeline {
                 sh 'docker push devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER'
             }
         }
+
         stage('Docker Image Scan') {
             agent {
                 docker {
@@ -98,44 +101,43 @@ pipeline {
                     args '-u root --entrypoint=""'
                 }
             }
-
             steps {
-                // Scan the  image
+                // Scan the image
                 sh "trivy image --format table -o trivy-image-report.html devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER"
-
             }
         }
 
-       stage('trigger-deployment') {
-    agent { 
-        label 'deploy' 
-    }
-    steps {
-        sh '''
-            TAG=${BUILD_NUMBER}
-            rm -rf rock-band-deployment || true
-            git clone https://github.com/s5wesley/rock-band-deployment.git 
-            cd rock-band-deployment/chart
-            # Update the image repository and tag
-            yq eval '.Values.repository.assets.image = "devopseasylearning/s5wesley-rock-music-band"' -i values.yaml
-            yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
-            
-            # Configure Git for commit
-            git config --global user.name "devopseasylearning"
-            git config --global user.email info@devopseasylearning.com
+        stage('trigger-deployment') {
+            agent { 
+                label 'deploy' 
+            }
+            steps {
+                sshagent(['github-ssh']) {  // Use SSH credentials stored in Jenkins
+                    sh '''
+                        TAG=${BUILD_NUMBER}
+                        rm -rf rock-band-deployment || true
+                        git clone git@github.com:s5wesley/rock-band-deployment.git 
+                        cd rock-band-deployment/chart
+                        # Update the image repository and tag
+                        yq eval '.Values.repository.assets.image = "devopseasylearning/s5wesley-rock-music-band"' -i values.yaml
+                        yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
+                        
+                        # Configure Git for commit
+                        git config --global user.name "devopseasylearning"
+                        git config --global user.email info@devopseasylearning.com
 
-            # Add and commit changes if necessary
-            git add -A
-            if git diff-index --quiet HEAD; then
-               echo "No changes to commit"
-            else
-               git commit -m "updating devopseasylearning/s5wesley-rock-music-band to ${TAG}"
-               git push origin master
-            fi
-        ''' 
-    }   
-}
-
+                        # Add and commit changes if necessary
+                        git add -A
+                        if git diff-index --quiet HEAD; then
+                           echo "No changes to commit"
+                        else
+                           git commit -m "updating devopseasylearning/s5wesley-rock-music-band to ${TAG}"
+                           git push origin master
+                        fi
+                    ''' 
+                }
+            }
+        }
 
         stage('Display Server IP') {
             steps {
