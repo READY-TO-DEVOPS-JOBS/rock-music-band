@@ -119,11 +119,11 @@ pipeline {
                     sh '''
                     TAG=${BUILD_NUMBER}
                     rm -rf rock-band-deployment || true
-                    git clone https://$GITHUB_USER:$GITHUB_TOKEN@github.com/s5wesley/rock-band-deployment.git
+                    git clone https://s5wesley:${GITHUB_TOKEN}@github.com/s5wesley/rock-band-deployment.git 
                     cd rock-band-deployment/chart
                     # Update the image repository and tag
-                    yq eval '.Values.repository.assets.image = "devopseasylearning/s5wesley-rock-music-band"' -i values.yaml
-                    yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
+                    yq eval '.repository.assets.image = "devopseasylearning/s5wesley-rock-music-band"' -i values.yaml
+                    yq eval '.repository.tag = "'"$TAG"'"' -i values.yaml
                     
                     # Configure Git for commit
                     git config --global user.name "devopseasylearning"
