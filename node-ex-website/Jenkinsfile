@@ -15,16 +15,19 @@ pipeline {
             steps {
                 sh 'docker system prune -fa || true'
             }
-        } 
-        
-        stage('checkout') {
+        }
+
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', 
-                    credentialsId: 'github-ssh', 
-                    url: 'git@github.com:READY-TO-DEVOPS-JOBS/rock-music-band.git'
+                script {
+                    // Use SSH for authentication during checkout
+                    git branch: 'main',
+                        credentialsId: 'github-ssh', 
+                        url: 'git@github.com:READY-TO-DEVOPS-JOBS/rock-music-band.git'
+                }
             }
         }
-        
+
         stage('Install Dependencies') {
             agent {
                 docker { 
@@ -49,7 +52,7 @@ pipeline {
             }
         }
 
-        stage('test') {
+        stage('Test') {
             agent {
                 docker { 
                     image 'node:22.4' 
@@ -102,38 +105,38 @@ pipeline {
                 }
             }
             steps {
-                // Scan the image
+                // Scan the Docker image
                 sh "trivy image --format table -o trivy-image-report.html devopseasylearning/s5wesley-rock-music-band:v$BUILD_NUMBER"
             }
         }
 
-        stage('trigger-deployment') {
+        stage('Trigger Deployment') {
             agent { 
                 label 'deploy' 
             }
             steps {
-                sshagent(['github-ssh']) {  // Use SSH credentials stored in Jenkins
+                withCredentials([usernamePassword(credentialsId: 's5wesley-github-token', usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
                     sh '''
-                        TAG=${BUILD_NUMBER}
-                        rm -rf rock-band-deployment || true
-                        git clone git@github.com:s5wesley/rock-band-deployment.git 
-                        cd rock-band-deployment/chart
-                        # Update the image repository and tag
-                        yq eval '.Values.repository.assets.image = "devopseasylearning/s5wesley-rock-music-band"' -i values.yaml
-                        yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
-                        
-                        # Configure Git for commit
-                        git config --global user.name "devopseasylearning"
-                        git config --global user.email info@devopseasylearning.com
+                    TAG=${BUILD_NUMBER}
+                    rm -rf rock-band-deployment || true
+                    git clone https://$GITHUB_USER:$GITHUB_TOKEN@github.com/s5wesley/rock-band-deployment.git
+                    cd rock-band-deployment/chart
+                    # Update the image repository and tag
+                    yq eval '.Values.repository.assets.image = "devopseasylearning/s5wesley-rock-music-band"' -i values.yaml
+                    yq eval '.Values.repository.tag = "'"$TAG"'"' -i values.yaml
+                    
+                    # Configure Git for commit
+                    git config --global user.name "devopseasylearning"
+                    git config --global user.email info@devopseasylearning.com
 
-                        # Add and commit changes if necessary
-                        git add -A
-                        if git diff-index --quiet HEAD; then
-                           echo "No changes to commit"
-                        else
-                           git commit -m "updating devopseasylearning/s5wesley-rock-music-band to ${TAG}"
-                           git push origin master
-                        fi
+                    # Add and commit changes if necessary
+                    git add -A
+                    if git diff-index --quiet HEAD; then
+                        echo "No changes to commit"
+                    else
+                        git commit -m "updating devopseasylearning/s5wesley-rock-music-band to ${TAG}"
+                        git push origin master
+                    fi
                     ''' 
                 }
             }
