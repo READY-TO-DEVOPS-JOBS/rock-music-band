@@ -117,7 +117,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 's5wesley-github-token', usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
                     sh '''
-                    TAG=${BUILD_NUMBER}
+                    TAG=v${BUILD_NUMBER}
                     rm -rf rock-band-deployment || true
                     git clone https://s5wesley:${GITHUB_TOKEN}@github.com/s5wesley/rock-band-deployment.git 
                     cd rock-band-deployment/chart
