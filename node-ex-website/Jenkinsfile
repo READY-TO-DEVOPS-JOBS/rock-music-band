@@ -68,20 +68,20 @@ pipeline {
             }
         }
 
-        stage('File System Scan') {
-            agent {
-                docker { 
-                    image 'bitnami/trivy:latest' 
-                    args '--entrypoint="" -u root'
-                }
-            }
-            steps {
-                sh ''' 
-                cd node-ex-website
-                trivy fs --format table -o trivy-fs-report.html .
-                '''
-            }
-        }
+        // stage('File System Scan') {
+        //     agent {
+        //         docker { 
+        //             image 'bitnami/trivy:latest' 
+        //             args '--entrypoint="" -u root'
+        //         }
+        //     }
+        //     steps {
+        //         sh ''' 
+        //         cd node-ex-website
+        //         trivy fs --format table -o trivy-fs-report.html .
+        //         '''
+        //     }
+        // }
 
         stage('Build Docker Image') {
             steps {
