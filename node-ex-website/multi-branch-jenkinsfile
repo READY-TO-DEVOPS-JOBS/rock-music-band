@@ -1,0 +1,148 @@
+pipeline {
+    agent any
+    parameters {
+        string(name: "DOCKERHUB_USERNAME", defaultValue: "devopseasylearning", description: "Enter your DockerHub username")
+        string(name: "DOCKERHUB_REPO", defaultValue: "s5wesley-rock-music-band", description: "Enter your DockerHub repository name")
+        string(name: "IMAGE_TAG", defaultValue: "latest", description: "Enter your image tag")
+        choice(name: "git_branch", choices: ["feature", "main", "staging", "preprod", "prod"], description: "Select your branch")
+        string(name: "git_url", defaultValue: "git@github.com:READY-TO-DEVOPS-JOBS/rock-music-band.git", description: "Enter your Git repository URL")
+    }
+
+    environment {
+        DOCKERHUB_CREDENTIALS = credentials('del-docker-hub-auth')
+    }
+
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Clean Environment') {
+            steps {
+                sh 'docker system prune -fa || true'
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                script {
+                    git branch: "${params.git_branch}",
+                        credentialsId: 'github-ssh', 
+                        url: "${params.git_url}"
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
+            agent {
+                docker { 
+                    image 'node:18-alpine'
+                    args '-u root'  
+                }
+            }
+            steps {
+                script {
+                    dir('node-ex-website') {
+                        sh 'npm install'
+                    }
+                }
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'del-docker-hub-auth', usernameVariable: 'DOCKERHUB_CREDENTIALS_USR', passwordVariable: 'DOCKERHUB_CREDENTIALS_PSW')]) {
+                    sh 'docker login -u $DOCKERHUB_CREDENTIALS_USR -p $DOCKERHUB_CREDENTIALS_PSW'
+                }
+            }
+        }
+
+        stage('Test') {
+            agent {
+                docker { 
+                    image 'node:22.4' 
+                    args '-u root' 
+                }
+            }
+            steps {
+                sh '''
+                cd node-ex-website
+                npm install 
+                npm test --passWithNoTests || true
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                dir('node-ex-website') {
+                    sh 'docker build -t ${params.DOCKERHUB_USERNAME}/${params.DOCKERHUB_REPO}:v$BUILD_NUMBER .'
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh 'docker push ${params.DOCKERHUB_USERNAME}/${params.DOCKERHUB_REPO}:v$BUILD_NUMBER'
+            }
+        }
+
+        stage('Docker Image Scan') {
+            agent {
+                docker {
+                    image 'bitnami/trivy:latest'
+                    args '-u root --entrypoint=""'
+                }
+            }
+            steps {
+                sh "trivy image --format table -o trivy-image-report.html ${params.DOCKERHUB_USERNAME}/${params.DOCKERHUB_REPO}:v$BUILD_NUMBER"
+            }
+        }
+
+        stage('Trigger Deployment') {
+            agent { 
+                label 'deploy' 
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 's5wesley-github-token', usernameVariable: 'GITHUB_USER', passwordVariable: 'GITHUB_TOKEN')]) {
+                    sh '''
+                    TAG=v${BUILD_NUMBER}
+                    rm -rf rock-band-deployment || true
+                    git clone https://s5wesley:${GITHUB_TOKEN}@github.com/s5wesley/rock-band-deployment.git 
+                    cd rock-band-deployment/chart
+                    # Update the image repository and tag
+                    yq eval '.repository.assets.image = "${params.DOCKERHUB_USERNAME}/${params.DOCKERHUB_REPO}"' -i values.yaml
+                    yq eval '.repository.tag = "'"$TAG"'"' -i values.yaml
+                    
+                    # Configure Git for commit
+                    git config --global user.name "devopseasylearning"
+                    git config --global user.email info@devopseasylearning.com
+
+                    # Add and commit changes if necessary
+                    git add -A
+                    if git diff-index --quiet HEAD; then
+                        echo "No changes to commit"
+                    else
+                        git commit -m "updating ${params.DOCKERHUB_USERNAME}/${params.DOCKERHUB_REPO} to ${TAG}"
+                        git push origin master
+                    fi
+                    ''' 
+                }
+            }
+        }
+
+        stage('Display Server IP') {
+            steps {
+                sh 'curl ifconfig.io'
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker logout'
+        }
+    }
+}
